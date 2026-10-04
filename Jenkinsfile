@@ -200,7 +200,7 @@ pipeline {
                     // Assim nao dependemos de PowerShell/curl do host nem de --network host.
 
                     def healthCmd =
-                        "docker compose -f ${env.COMPOSE_FILE} exec -T bff node -e \"let n=0; const t=setInterval(async()=>{n++;try{const r=await fetch('http://api:8080/actuator/health');if(r.ok){console.log(await r.text());clearInterval(t);process.exit(0)}}catch(e){} if(n>=18){clearInterval(t);process.exit(1)}},5000)\""
+                        "docker compose -f ${env.COMPOSE_FILE} exec -T bff node -e \"let n=0; const t=setInterval(async()=>{n++;try{const r=await fetch('http://api:8080/actuator/health');if(r.ok){console.log(await r.text());clearInterval(t);process.exit(0)}}catch(e){} if(n>=36){clearInterval(t);process.exit(1)}},5000)\""
 
                     try {
                         runCmd(healthCmd)
