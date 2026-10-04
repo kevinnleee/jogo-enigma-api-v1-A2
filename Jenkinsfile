@@ -225,24 +225,24 @@ pipeline {
 
         stage('9 - CD - Cypress E2E em Container') {
             steps {
-                script {
-                    runCmd(
-                        'docker compose -f ' +
-                        env.COMPOSE_FILE +
-                        ' --profile e2e run --rm cypress'
-                    )
-                }
-            }
-
-            post {
-                always {
-                    archiveArtifacts(
-                        artifacts: 'frontend/cypress/screenshots/**,frontend/cypress/videos/**',
-                        allowEmptyArchive: true
-                    )
-                }
-            }
+            script {
+            runCmd(
+                'docker compose -f ' +
+                env.COMPOSE_FILE +
+                ' --profile e2e run --rm -e CYPRESS_VERIFY_TIMEOUT=120000 cypress'
+            )
         }
+    }
+
+    post {
+        always {
+            archiveArtifacts(
+                artifacts: 'frontend/cypress/screenshots/**,frontend/cypress/videos/**',
+                allowEmptyArchive: true
+            )
+        }
+    }
+}
 
         stage('10 - Observabilidade') {
             steps {
