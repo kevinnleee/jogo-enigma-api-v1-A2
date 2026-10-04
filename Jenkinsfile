@@ -21,9 +21,17 @@ def mvnw(String args) {
 pipeline {
     agent any
 
+    // Forca o Pipeline a utilizar o JDK 21 cadastrado no Jenkins
+    tools {
+        jdk 'JDK21'
+    }
+
     parameters {
-        booleanParam(name: 'PUSH_DOCKER_HUB', defaultValue: false,
-            description: 'Opcional: publicar a imagem no Docker Hub apos o build local.')
+        booleanParam(
+            name: 'PUSH_DOCKER_HUB',
+            defaultValue: false,
+            description: 'Opcional: publicar a imagem no Docker Hub apos o build local.'
+        )
     }
 
     environment {
@@ -39,6 +47,7 @@ pipeline {
     }
 
     stages {
+
         stage('0 - Preflight do Ambiente') {
             steps {
                 script {
@@ -75,7 +84,9 @@ pipeline {
         }
 
         stage('1 - Checkout') {
-            steps { checkout scm }
+            steps {
+                checkout scm
+            }
         }
 
         stage('2 - CI - JUnit + Testcontainers + JaCoCo') {
@@ -85,41 +96,79 @@ pipeline {
                     mvnw('-B clean test')
                 }
             }
+
             post {
                 always {
-                    junit testResults: 'target/surefire-reports/*.xml', allowEmptyResults: true
-                    archiveArtifacts artifacts: 'target/site/jacoco/**', allowEmptyArchive: true
+                    junit testResults: 'target/surefire-reports/*.xml',
+                          allowEmptyResults: true
+
+                    archiveArtifacts artifacts: 'target/site/jacoco/**',
+                                     allowEmptyArchive: true
                 }
             }
         }
 
         stage('3 - CI - Qualidade PMD') {
-            steps { script { mvnw('-B pmd:pmd -DskipTests') } }
+            steps {
+                script {
+                    mvnw('-B pmd:pmd -DskipTests')
+                }
+            }
+
             post {
-                always { archiveArtifacts artifacts: 'target/site/pmd.html', allowEmptyArchive: true }
+                always {
+                    archiveArtifacts artifacts: 'target/site/pmd.html',
+                                     allowEmptyArchive: true
+                }
             }
         }
 
         stage('4 - CI - Package') {
-            steps { script { mvnw('-B package -DskipTests') } }
+            steps {
+                script {
+                    mvnw('-B package -DskipTests')
+                }
+            }
         }
 
         stage('5 - CD - Build dos Containers') {
-            steps { script { runCmd('docker compose -f ' + env.COMPOSE_FILE + ' build api bff') } }
+            steps {
+                script {
+                    runCmd(
+                        'docker compose -f ' +
+                        env.COMPOSE_FILE +
+                        ' build api bff'
+                    )
+                }
+            }
         }
 
         stage('6 - Registry - Docker Hub (opcional)') {
-            when { expression { return params.PUSH_DOCKER_HUB } }
+            when {
+                expression {
+                    return params.PUSH_DOCKER_HUB
+                }
+            }
+
             steps {
-                withCredentials([usernamePassword(credentialsId: env.DOCKER_CREDENTIALS_ID,
-                    usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASSWORD')]) {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: env.DOCKER_CREDENTIALS_ID,
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )
+                ]) {
                     script {
                         if (isUnix()) {
                             sh 'echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin'
                         } else {
                             bat 'echo %DOCKER_PASSWORD% | docker login -u %DOCKER_USER% --password-stdin'
                         }
-                        runCmd("docker push ${env.DOCKER_IMAGE}:${env.IMAGE_TAG}")
+
+                        runCmd(
+                            "docker push ${env.DOCKER_IMAGE}:${env.IMAGE_TAG}"
+                        )
+
                         runCmd('docker logout')
                     }
                 }
@@ -129,8 +178,17 @@ pipeline {
         stage('7 - CD - Deploy HOMOL') {
             steps {
                 script {
-                    runCmd('docker compose -f ' + env.COMPOSE_FILE + ' down --remove-orphans')
-                    runCmd('docker compose -f ' + env.COMPOSE_FILE + ' up -d postgres pgadmin api bff prometheus grafana')
+                    runCmd(
+                        'docker compose -f ' +
+                        env.COMPOSE_FILE +
+                        ' down --remove-orphans'
+                    )
+
+                    runCmd(
+                        'docker compose -f ' +
+                        env.COMPOSE_FILE +
+                        ' up -d postgres pgadmin api bff prometheus grafana'
+                    )
                 }
             }
         }
@@ -140,12 +198,25 @@ pipeline {
                 script {
                     // Health check executado de dentro do BFF, pela rede interna do Compose.
                     // Assim nao dependemos de PowerShell/curl do host nem de --network host.
-                    def healthCmd = "docker compose -f ${env.COMPOSE_FILE} exec -T bff node -e \"let n=0; const t=setInterval(async()=>{n++;try{const r=await fetch('http://api:8080/actuator/health');if(r.ok){console.log(await r.text());clearInterval(t);process.exit(0)}}catch(e){} if(n>=18){clearInterval(t);process.exit(1)}},5000)\""
+
+                    def healthCmd =
+                        "docker compose -f ${env.COMPOSE_FILE} exec -T bff node -e \"let n=0; const t=setInterval(async()=>{n++;try{const r=await fetch('http://api:8080/actuator/health');if(r.ok){console.log(await r.text());clearInterval(t);process.exit(0)}}catch(e){} if(n>=18){clearInterval(t);process.exit(1)}},5000)\""
+
                     try {
                         runCmd(healthCmd)
                     } catch (err) {
-                        runCmd('docker compose -f ' + env.COMPOSE_FILE + ' ps')
-                        runCmd('docker compose -f ' + env.COMPOSE_FILE + ' logs --tail=100 api')
+                        runCmd(
+                            'docker compose -f ' +
+                            env.COMPOSE_FILE +
+                            ' ps'
+                        )
+
+                        runCmd(
+                            'docker compose -f ' +
+                            env.COMPOSE_FILE +
+                            ' logs --tail=100 api'
+                        )
+
                         throw err
                     }
                 }
@@ -153,10 +224,22 @@ pipeline {
         }
 
         stage('9 - CD - Cypress E2E em Container') {
-            steps { script { runCmd('docker compose -f ' + env.COMPOSE_FILE + ' --profile e2e run --rm cypress') } }
+            steps {
+                script {
+                    runCmd(
+                        'docker compose -f ' +
+                        env.COMPOSE_FILE +
+                        ' --profile e2e run --rm cypress'
+                    )
+                }
+            }
+
             post {
                 always {
-                    archiveArtifacts artifacts: 'frontend/cypress/screenshots/**,frontend/cypress/videos/**', allowEmptyArchive: true
+                    archiveArtifacts(
+                        artifacts: 'frontend/cypress/screenshots/**,frontend/cypress/videos/**',
+                        allowEmptyArchive: true
+                    )
                 }
             }
         }
@@ -173,10 +256,19 @@ pipeline {
     }
 
     post {
-        success { echo 'Pipeline V5.1 concluido: Windows/macOS/Linux, Testcontainers, HOMOL, E2E e observabilidade aprovados.' }
-        failure { echo 'Pipeline interrompido. Consulte o stage e os logs para identificar ambiente, teste ou servico responsavel.' }
+        success {
+            echo 'Pipeline V5.1 concluido: Windows/macOS/Linux, Testcontainers, HOMOL, E2E e observabilidade aprovados.'
+        }
+
+        failure {
+            echo 'Pipeline interrompido. Consulte o stage e os logs para identificar ambiente, teste ou servico responsavel.'
+        }
+
         always {
-            archiveArtifacts artifacts: 'target/site/jacoco/**,target/site/pmd.html,frontend/cypress/screenshots/**,frontend/cypress/videos/**', allowEmptyArchive: true
+            archiveArtifacts(
+                artifacts: 'target/site/jacoco/**,target/site/pmd.html,frontend/cypress/screenshots/**,frontend/cypress/videos/**',
+                allowEmptyArchive: true
+            )
         }
     }
 }
